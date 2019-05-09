@@ -10,7 +10,7 @@ import UIKit
 
 
 protocol ListActions: class{
-    func didTapCell(_ viewModel: RestaurantListViewModel)
+    func didTapCell(_ viewController: UIViewController, viewModel: RestaurantListViewModel)
 }
 
 
@@ -40,15 +40,19 @@ class RestaurantTableViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-            let cell = tableView.dequeueReusableCell(withIdentifier: "RestaurantCell", for: indexPath) as! RestaurantTableViewCell
+        let cell = tableView.dequeueReusableCell(withIdentifier: "RestaurantCell", for: indexPath) as! RestaurantTableViewCell
+        
         let vm = viewModels[indexPath.row]
         cell.configure(with: vm)
+        
         return cell
     }
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard let detailsViewController = storyboard?.instantiateViewController(withIdentifier: "DetailsViewController") else { return }
+        navigationController?.pushViewController(detailsViewController, animated: true)
         let vm = viewModels[indexPath.row]
-        delegete?.didTapCell(vm)
+        delegete?.didTapCell(detailsViewController, viewModel: vm)
     }
     
 }

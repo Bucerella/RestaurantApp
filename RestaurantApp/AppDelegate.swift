@@ -19,6 +19,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let storyboard = UIStoryboard(name: "Main", bundle: nil)
     let service = MoyaProvider<YelpService.BusinessesProvider>()
     let jsonDecoder = JSONDecoder()
+    var navigationController: UINavigationController?
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         
@@ -48,6 +49,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         default:
             print("****def")
             let nav = storyboard.instantiateViewController(withIdentifier: "RestaurantNavigationController") as? UINavigationController
+            self.navigationController = nav
             window.rootViewController = nav
             locationService.getLocation()
             (nav?.topViewController as? RestaurantTableViewController)?.delegete = self
@@ -57,34 +59,43 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
     
-    private func loadDetails(withId id: String){
+    private func loadDetails(for viewController: UIViewController, withId id: String){
         service.request(.details(id: id)) { [weak self] (result) in
             switch result {
             case .success(let response):
                 guard let strongSelf = self else {return}
-                let details = try? strongSelf.jsonDecoder.decode(Details.self, from: response.data)
-                print("details:\(details)")
+                if let details = try? strongSelf.jsonDecoder.decode(Details.self, from: response.data){
+                    let detailsViewModel = DetailsViewModel(details: details)
+                    (viewController as? DetailsFoodViewController)?.viewModel = detailsViewModel
+                }
             case .failure(let error):
                 print("Failed to get details \(error)")
             }
         }
     }
     
-    private func loadBusinesses(with coordinate: CLLocationCoordinate2D){
-        
+    private func loadBusinesses(with coordinate: CLLocationCoordinate2D) {
         service.request(.search(lat: coordinate.latitude, long: coordinate.longitude)) { [weak self] (result) in
-            switch result{
+            guard let strongSelf = self else { return }
+            switch result {
             case .success(let response):
-                guard let strongSelf = self else {return}
                 let root = try? strongSelf.jsonDecoder.decode(Root.self, from: response.data)
-                let viewModels = root?.businesses.compactMap(RestaurantListViewModel.init)
-                .sorted(by: {$0.distance < $1.distance})
-                if let nav = strongSelf.window.rootViewController as? UINavigationController, let restaurantListViewController = nav.topViewController as? RestaurantTableViewController{
+                let viewModels = root?.businesses
+                    .compactMap(RestaurantListViewModel.init)
+                    .sorted(by: { $0.distance < $1.distance })
+                if let nav = strongSelf.window.rootViewController as? UINavigationController,
+                    let restaurantListViewController = nav.topViewController as? RestaurantTableViewController {
                     restaurantListViewController.viewModels = viewModels ?? []
+                } else if let nav = strongSelf.storyboard
+                    .instantiateViewController(withIdentifier: "RestaurantNavigationController") as? UINavigationController {
+                    strongSelf.navigationController = nav
+                    strongSelf.window.rootViewController?.present(nav, animated: true) {
+                        (nav.topViewController as? RestaurantTableViewController)?.delegete = self
+                        (nav.topViewController as? RestaurantTableViewController)?.viewModels = viewModels ?? []
+                    }
                 }
-                
             case .failure(let error):
-                print("Error:\(error)")
+                print("Error: \(error)")
             }
         }
     }
@@ -93,8 +104,8 @@ extension AppDelegate: LocationActions, ListActions {
     func didTapAllow() {
         locationService.requestLocationAuthorization()
     }
-    func didTapCell(_ viewModel: RestaurantListViewModel) {
-        loadDetails(withId: viewModel.id)
+    func didTapCell(_ viewController: UIViewController,viewModel: RestaurantListViewModel) {
+        loadDetails(for: viewController, withId: viewModel.id)
     }
 }
 
